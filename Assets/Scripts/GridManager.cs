@@ -7,7 +7,9 @@ using Assets.Scripts;
 
 public class GridManager : MonoBehaviour
 {
-    private Dictionary<Vector2Int, IGridObject> grid = new Dictionary<Vector2Int, IGridObject>();
+    private Dictionary<Vector2Int, IGridObject> gridObjects = new Dictionary<Vector2Int, IGridObject>();
+    private Dictionary<Vector2Int, IGridObject> gridTilemap = new Dictionary<Vector2Int, IGridObject>();
+
     private PlayerController BasePlayer = new PlayerController();
 
     // Start is called before the first frame update
@@ -29,7 +31,10 @@ public class GridManager : MonoBehaviour
         // Compress the bounds of the tile map.
         GetTileMapGrid().CompressBounds();
 
-        // populate the grid...
+        // populate the grid tilemap...
+
+
+        // populate the grid objects...
     }
 
     private Tilemap GetTileMapGrid()
@@ -38,13 +43,22 @@ public class GridManager : MonoBehaviour
     }
 
 
-    IGridObject GetGridAt(Vector2Int pos)
+    IGridObject GetGridObjectsAt(Vector2Int pos)
     {
-        if (!grid.ContainsKey(pos))
+        if (!gridObjects.ContainsKey(pos))
         {
             return null;
         }
-        return grid[pos];
+        return gridObjects[pos];
+    }
+
+    IGridObject GetGridTilemapAt(Vector2Int pos)
+    {
+        if (!gridTilemap.ContainsKey(pos))
+        {
+            return null;
+        }
+        return gridTilemap[pos];
     }
 
     // When the player tries to perform the summon action, return the location the newly summoned player will appear.
@@ -53,13 +67,13 @@ public class GridManager : MonoBehaviour
     {
         // Starting at the first wall tile in front of the player, step through until we reach a regular floor tile
         Vector2Int stepPos = startPos + dir;
-        while (GetGridAt(stepPos) != null && GetGridAt(stepPos).GetTag() == Tag.Wall)
+        while (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Wall)
         {
             stepPos += dir;
         }
 
         // Valid summon if the resultant tile is floor. Otherwise (pit?) return invalid.
-        if (GetGridAt(stepPos) != null && GetGridAt(stepPos).GetTag() == Tag.Floor)
+        if (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Floor)
         {
             return stepPos;
         }
@@ -77,7 +91,7 @@ public class GridManager : MonoBehaviour
         // Note - Probably differentiate between 2 layers - Tilemap and GridObjects
 
         Vector2Int resultingPos = gridObj.GetGridPosition() + moveDir;
-        IGridObject resultingPosGridObj = GetGridAt(resultingPos);
+        IGridObject resultingPosGridObj = GetGridObjectsAt(resultingPos);
         if (resultingPosGridObj == null)
         {
             isValidMove = true;
@@ -181,7 +195,7 @@ public class GridManager : MonoBehaviour
         }
         // 2. The player is currently facing a wall.
         Vector2Int faceDir = player.GetFaceDir();
-        IGridObject facingObject = GetGridAt(player.GetGridPosition() + faceDir);
+        IGridObject facingObject = GetGridObjectsAt(player.GetGridPosition() + faceDir);
         bool isFacingObjectWall = facingObject != null && facingObject.GetTag() == Tag.Wall;
         if (!isFacingObjectWall)
         {
@@ -190,7 +204,7 @@ public class GridManager : MonoBehaviour
 
         // Draw dots over each wall tile>
         Vector2Int stepPos = facingObject.GetGridPosition();
-        while (GetGridAt(stepPos) != null && GetGridAt(stepPos).GetTag() == Tag.Wall)
+        while (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Wall)
         {
             if (Mathf.Abs(faceDir.x) > 0)
             {
