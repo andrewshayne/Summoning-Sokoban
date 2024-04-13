@@ -33,7 +33,7 @@ public class GridManager : MonoBehaviour
 
         // populate the grid tilemap...
 
-        // populate the grid ob
+        // populate the grid objects
     }
 
     private Tilemap GetTileMapGrid()
