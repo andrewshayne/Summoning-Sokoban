@@ -67,8 +67,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     {
         gridPosition = pos;
 
-        position.x = pos.x;
-        position.y = pos.y;
+        transform.position = new Vector3(pos.x, pos.y, 0);
     }
 
     public bool GetIsPushable()
