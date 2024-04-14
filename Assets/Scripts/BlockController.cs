@@ -10,6 +10,9 @@ public class BlockController : MonoBehaviour, IGridObject
     private Vector2Int gridPosition;
     private Vector2 position;
 
+    // ephemeral state
+    private float moveSpeed = 8f;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -19,7 +22,8 @@ public class BlockController : MonoBehaviour, IGridObject
     // Update is called once per frame
     void Update()
     {
-        
+        Vector3 targetPos = new Vector3Int(gridPosition.x, gridPosition.y, 0);
+        transform.position = Vector3.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
     }
 
     public Vector2Int GetGridPosition()
@@ -37,11 +41,6 @@ public class BlockController : MonoBehaviour, IGridObject
         this.id = id;
     }
 
-    public bool GetIsPushable()
-    {
-        return true;
-    }
-
     public Vector2 GetTruePosition()
     {
         return position;
@@ -50,8 +49,6 @@ public class BlockController : MonoBehaviour, IGridObject
     public void SetGridPosition(Vector2Int pos)
     {
         gridPosition = pos;
-
-        transform.position = new Vector3(pos.x, pos.y, 0);
     }
 
     public Tag GetTag()

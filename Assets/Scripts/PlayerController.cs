@@ -15,26 +15,55 @@ public class PlayerController : MonoBehaviour, IGridObject
     private Vector2Int faceDir = new Vector2Int(0, -1);
     private Vector2Int summonedAtPos;
     private bool IsActiveState = true;
-
+    private Sprite sprite;
 
     public bool isSummonReady = false;
     public bool IsBasePlayer = false;
 
+    // Animation
+    public Animator animator;
+
+    // ephemeral state
+    private float moveSpeed = 8f;
+
+    public void SetAnimatorMovingState(bool isMoving)
+    {
+        animator.SetBool("IsInputLocked", isMoving);
+    }
+
+    public void SetAnimatorSummoningState(bool isSummoning)
+    {
+        animator.SetBool("IsSummoning", isSummoning);
+    }
+
+
     // Start is called before the first frame update
     void Start()
     {
-        
+
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        Vector3 targetPos = new Vector3Int(gridPosition.x, gridPosition.y, 0);
+        transform.position = Vector3.MoveTowards(transform.position, targetPos, moveSpeed * Time.deltaTime);
     }
 
     public void SetIsActiveState(bool isActive)
     {
         IsActiveState = isActive;
+
+        if (IsActiveState)
+        {
+            sprite = Resources.Load<Sprite>("Sprites/player1") as Sprite;
+        }
+        else
+        {
+            sprite = Resources.Load<Sprite>("Sprites/inactive_player") as Sprite;
+        }
+        GetComponent<SpriteRenderer>().sprite = sprite;
+        animator.SetBool("IsActive", IsActiveState);
     }
 
     public bool GetIsActiveState()
@@ -78,6 +107,8 @@ public class PlayerController : MonoBehaviour, IGridObject
         {
             GetComponent<SpriteRenderer>().flipX = false;
         }
+        animator.SetInteger("FaceDirX", faceDir.x);
+        animator.SetInteger("FaceDirY", faceDir.y);
     }
 
     // IGridObject Interface Implementations
@@ -104,13 +135,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetGridPosition(Vector2Int pos)
     {
         gridPosition = pos;
-
-        transform.position = new Vector3(pos.x, pos.y, 0);
-    }
-
-    public bool GetIsPushable()
-    {
-        return true;
+        //transform.position = new Vector3(pos.x, pos.y, 0);
     }
 
     public Tag GetTag()

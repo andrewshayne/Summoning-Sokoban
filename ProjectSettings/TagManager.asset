@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Block
   - SummoningCircle
+  - Pickup
   layers:
   - Default
   - TransparentFX

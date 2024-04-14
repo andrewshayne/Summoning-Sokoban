@@ -12,7 +12,6 @@ namespace Assets.Scripts
         Vector2Int GetGridPosition();
         Vector2 GetTruePosition();
         void SetGridPosition(Vector2Int pos);
-        bool GetIsPushable();
         Tag GetTag();
     }
 

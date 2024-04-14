@@ -20,6 +20,12 @@ public class GridManager : MonoBehaviour
     public GameObject PlayerPrefab;
     public GameObject SummoningCirclePrefab;
 
+    // Dots
+    public Sprite Dot;
+    private List<GameObject> Dots = new List<GameObject>();
+    private Vector2Int dotPlayerPos;
+    private Vector2Int dotPlayerDir;
+
     // Start is called before the first frame update
     void Awake()
     {
@@ -31,7 +37,9 @@ public class GridManager : MonoBehaviour
     void Update()
     {
         ProcessPlayerInput();
-        DrawSummoningIndicators();
+
+        // Need to uncomment to render indicators
+        //DrawSummoningIndicators();
     }
 
     // Initialize the grid using the tilemap in the scene
@@ -44,9 +52,21 @@ public class GridManager : MonoBehaviour
         // populate the grid tilemap...
         foreach (var pos in tilemap.cellBounds.allPositionsWithin)
         {
-            Debug.Log("tile: " + tilemap.GetTile(pos).name + ", pos: " + pos.ToString());
             Vector2Int gridPos = new Vector2Int(pos.x, pos.y);
             string tileName = tilemap.GetTile(pos).name;
+
+            // handle pattern-matching outside switch...
+            if (tileName.StartsWith("wall"))
+            {
+                gridTilemap.Add(gridPos, TileType.Wall);
+                continue;
+            }
+            else if (tileName.StartsWith("floor"))
+            {
+                gridTilemap.Add(gridPos, TileType.Floor);
+                continue;
+            }
+
             switch(tileName)
             {
                 case "top":
@@ -86,6 +106,9 @@ public class GridManager : MonoBehaviour
                     break;
                 case "Block":
                     gridObj = gameObj.GetComponent<BlockController>();
+                    break;
+                case "Pickup":
+                    gridObj = gameObj.GetComponent<PickupController>();
                     break;
                 default:
                     throw new System.Exception("Grid Object must have a valid tag!!!");
@@ -163,7 +186,7 @@ public class GridManager : MonoBehaviour
         return new Vector2Int(999,999);
     }
 
-    void DoSummonAction()
+    bool DoSummonAction()
     {
         PlayerController player = GetActivePlayer();
         Vector2Int summonPos = GetSummonLocation(player.GetGridPosition(), player.GetFaceDir());
@@ -171,13 +194,13 @@ public class GridManager : MonoBehaviour
         // Invalid summon.
         if (summonPos == new Vector2Int(999,999))
         {
-            return;
+            return false;
         }
 
         // No charge! Play a sad noise :'(
         if (!player.IsSummonReady())
         {
-            return;
+            return false;
         }
 
         // Create a new player and summoning circle at position
@@ -192,6 +215,7 @@ public class GridManager : MonoBehaviour
         // New player
         newPlayer.SetID(nextAvailableId++);
         newPlayer.SetParentId(player.GetID());
+        gridObjectsById.Add(newPlayer.GetID(), newPlayer);
         SetGridObjectPosition(newPlayer, summonPos);
 
         // New circle
@@ -204,6 +228,8 @@ public class GridManager : MonoBehaviour
         player.SetSummonedPlayerId(newPlayer.GetID());
 
         ReplaceActivePlayer(newPlayer);
+
+        return true;
     }
 
     // ONLY call this function if player stepped on their summoning circle
@@ -267,6 +293,19 @@ public class GridManager : MonoBehaviour
         {
             isValidMove = ProcessMove(resultingPosGridObj, moveDir);
         }
+        else if (resultingPosGridObj.GetTag() == Tag.Pickup)
+        {
+            // Decide what to do depending on if the current gridObj is player or something else?
+            if (gridObj.GetTag() == Tag.Player)
+            {
+                isValidMove = true;
+            }
+            // One easier option could be to destroy the gem if a block runs into it
+            else
+            {
+                isValidMove = ProcessMove(resultingPosGridObj, moveDir);
+            }
+        }
 
         // Do any post-processing here...
         // DoPostMoveProcessing()...
@@ -276,19 +315,22 @@ public class GridManager : MonoBehaviour
             // Make player take any pickup! Should it be pushable if it's not the player moving into it?
             // Probably best handled in above process logic.
             bool cellContainsPickup = resultingPosGridObj != null && resultingPosGridObj.GetTag() == Tag.Pickup;
-            if (gridObj.GetTag() == Tag.Player && cellContainsPickup)
+            bool isPlayer = gridObj.GetTag() == Tag.Player;
+            if (isPlayer && cellContainsPickup)
             {
                 // Grant the player summoning. (Too bad if they already had it?)
                 (gridObj as PlayerController).SetSummonReady(true);
 
                 // Remove the pickup from the floor.
-                // RemovePickupFromFloor(resultingPos);
+                GameObject pickupGameObj = (resultingPosGridObj as PickupController).gameObject;
+                gridObjects.Remove(resultingPos);
+                Destroy(pickupGameObj);
             }
 
             SetGridObjectPosition(gridObj, resultingPos);
 
             // And now that we moved here, IF the player steps on their circle, return to summoner!
-            if (gridObj.GetTag() == Tag.Player &&
+            if (isPlayer &&
                 circles.ContainsKey(resultingPos) &&
                 circles[resultingPos].playerId == gridObj.GetID())
             {
@@ -317,6 +359,12 @@ public class GridManager : MonoBehaviour
 
     void ProcessPlayerInput()
     {
+        // Don't process player input while something is happening.
+        if (lockCounter > 0)
+        {
+            return;
+        }
+
         // Move this elsewhere so we don't constantly do this recursive call every frame,
         // but instead set the active player after a move is made.
         PlayerController activePlayer = GetActivePlayer();
@@ -328,7 +376,11 @@ public class GridManager : MonoBehaviour
         // Handle summon action
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            DoSummonAction();
+            bool isValidSummon = DoSummonAction();
+            if (isValidSummon)
+            {
+                StartCoroutine(SummonNewPlayer());
+            }
             return;
         }
 
@@ -353,11 +405,41 @@ public class GridManager : MonoBehaviour
         // Move input- face the player this way, and potentially move them too.
         if (moveDir != Vector2Int.zero)
         {
-            Debug.Log("Player pressed key. Vec: " + moveDir.ToString());
             activePlayer.SetFaceDir(moveDir);
-            ProcessMove(activePlayer, moveDir);
+            bool isValidMove = ProcessMove(activePlayer, moveDir);
+            if (isValidMove)
+            {
+                StartCoroutine(MovePlayer());
+            }
         }
+    }
 
+    private float InputLockDuration = 0.2f;
+    public IEnumerator MovePlayer()
+    {
+        IncrementLockingCounter();
+        ActivePlayer.SetAnimatorMovingState(true);
+        yield return new WaitForSeconds(InputLockDuration);
+        ActivePlayer.SetAnimatorMovingState(false);
+        DecrementLockingCounter();
+    }
+    public IEnumerator SummonNewPlayer()
+    {
+        IncrementLockingCounter();
+        ActivePlayer.SetAnimatorSummoningState(true);
+        yield return new WaitForSeconds(InputLockDuration);
+        ActivePlayer.SetAnimatorSummoningState(false);
+        DecrementLockingCounter();
+    }
+
+    private int lockCounter = 0;
+    void IncrementLockingCounter()
+    {
+        lockCounter++;
+    }
+    void DecrementLockingCounter()
+    {
+        lockCounter--;
     }
 
     // Call this render func from Update() to display the current summoning projection.
@@ -365,40 +447,62 @@ public class GridManager : MonoBehaviour
     {
         PlayerController player = GetActivePlayer();
 
-        // Two conditions must be met:
-        // 1. The player has summoning ready.
+        // Early return if the player doesn't have summon ready.
         if (!player.IsSummonReady())
         {
+            Debug.Log("Summon is not ready");
+            DotCleanUp();
             return;
         }
-        // 2. The player is currently facing a wall.
         Vector2Int faceDir = player.GetFaceDir();
-        Vector2Int pos = player.GetGridPosition() + faceDir;
-        TileType facingTile = GetGridTilemapAt(pos);
+        Vector2Int playerPos = player.GetGridPosition();
+        Vector2Int facingTilePos = playerPos + faceDir;
+        TileType facingTile = GetGridTilemapAt(facingTilePos);
+
+        // Early return if the player isn't facing a wall.
         if (facingTile != TileType.Wall)
         {
+            Debug.Log("Player is not facing a wall");
+            DotCleanUp();
             return;
         }
 
-        // Draw dots over each wall tile>
-        Vector2Int stepPos = pos;
-        TileType tileType = GetGridTilemapAt(stepPos);
-        while (GetGridTilemapAt(stepPos) == TileType.Wall)
+        // Early return if the player is looking at a spot that already has the indicator.
+        if (faceDir == dotPlayerDir && dotPlayerPos == playerPos)
         {
-            if (Mathf.Abs(faceDir.x) > 0)
-            {
-                DrawHorizontalIndicator(stepPos);
-            }
-            else
-            {
-                DrawVerticalIndicator(stepPos);
-            }
-            stepPos += faceDir;
-            tileType = GetGridTilemapAt(stepPos);
+            Debug.Log("Player in same position, no need to draw dots");
+            return;
         }
 
-        // Draw summoning indicator after the last wall.
-        DrawSummoningPositionIndicator(stepPos);
+        if (faceDir != dotPlayerDir)
+        {
+            DotCleanUp();
+        }
+
+        dotPlayerDir = faceDir;
+        dotPlayerPos = playerPos;
+
+        DrawIndicator(dotPlayerPos, dotPlayerDir);
+
+        //// // Draw dots over each wall tile>
+        //// Vector2Int stepPos = pos;
+        //// TileType tileType = GetGridTilemapAt(stepPos);
+        //// while (GetGridTilemapAt(stepPos) == TileType.Wall)
+        //// {
+        ////     if (Mathf.Abs(faceDir.x) > 0)
+        ////     {
+        ////         DrawHorizontalIndicator(stepPos);
+        ////     }
+        ////     else
+        ////     {
+        ////         DrawVerticalIndicator(stepPos);
+        ////     }
+        ////     stepPos += faceDir;
+        ////     tileType = GetGridTilemapAt(stepPos);
+        //// }
+
+        //// // Draw summoning indicator after the last wall.
+        //// DrawSummoningPositionIndicator(stepPos);
     }
 
     void DrawHorizontalIndicator(Vector2Int pos)
@@ -414,5 +518,25 @@ public class GridManager : MonoBehaviour
     void DrawSummoningPositionIndicator(Vector2Int pos)
     {
         // Implement me
+    }
+
+    void DrawIndicator(Vector2Int pos, Vector2Int dir)
+    {
+        GameObject g = new GameObject();
+        g.transform.position = new Vector3Int(pos.x, pos.y, 0);
+        var s = g.AddComponent<SpriteRenderer>();
+        s.sprite = Dot;
+        Dots.Add(g);
+    }
+    private void DotCleanUp()
+    {
+        Debug.Log("Destroying previously drawn dots");
+        // Destroy previously drawn dots
+        for (int i = 0; i < Dots.Count; i++)
+        {
+            Destroy(Dots[i]);
+        }
+        Debug.Log($"All {Dots.Count} dots destroyed");
+        Dots = new List<GameObject>();
     }
 }
