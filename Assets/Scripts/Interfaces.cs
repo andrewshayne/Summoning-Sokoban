@@ -19,10 +19,13 @@ namespace Assets.Scripts
     {
         Player,
         Block,
+        Pickup,
+    }
 
-        // Tiles... May need to do this dfferently
+    public enum TileType
+    {
+        Empty, // shouldn't have an empty tile!
         Floor,
-        FloorWithPickup,
         Wall,
         Pit,
     }

@@ -14,6 +14,8 @@ public class PlayerController : MonoBehaviour, IGridObject
     private PlayerController summonedPlayer = null;
     private Vector2Int faceDir = new Vector2Int(0, -1);
 
+    public bool IsBasePlayer = false;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -64,6 +66,9 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetGridPosition(Vector2Int pos)
     {
         gridPosition = pos;
+
+        position.x = pos.x;
+        position.y = pos.y;
     }
 
     public bool GetIsPushable()

@@ -8,14 +8,16 @@ using Assets.Scripts;
 public class GridManager : MonoBehaviour
 {
     private Dictionary<Vector2Int, IGridObject> gridObjects = new Dictionary<Vector2Int, IGridObject>();
-    private Dictionary<Vector2Int, IGridObject> gridTilemap = new Dictionary<Vector2Int, IGridObject>();
+    private Dictionary<Vector2Int, TileType> gridTilemap = new Dictionary<Vector2Int, TileType>();
 
     private PlayerController BasePlayer = new PlayerController();
 
     // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
         Debug.Log("Hello World!!!");
+
+        InitializeGrid();
     }
 
     // Update is called once per frame
@@ -29,11 +31,63 @@ public class GridManager : MonoBehaviour
     void InitializeGrid()
     {
         // Compress the bounds of the tile map.
-        GetTileMapGrid().CompressBounds();
+        Tilemap tilemap = GetTileMapGrid();
+        tilemap.CompressBounds();
+
 
         // populate the grid tilemap...
+        foreach (var pos in tilemap.cellBounds.allPositionsWithin)
+        {
+            Debug.Log("tile: " + tilemap.GetTile(pos).name + ", pos: " + pos.ToString());
+            Vector2Int gridPos = new Vector2Int(pos.x, pos.y);
+            string tileName = tilemap.GetTile(pos).name;
+            switch(tileName)
+            {
+                case "top":
+                case "wall":
+                    gridTilemap.Add(gridPos, TileType.Wall);
+                    break;
+                case "pit":
+                    gridTilemap.Add(gridPos, TileType.Pit);
+                    break;
+
+                // Perhaps revisit this! Assuming floor by default!
+                default:
+                    gridTilemap.Add(gridPos, TileType.Floor);
+                    break;
+            }
+        }
+
 
         // populate the grid objects
+        Transform sceneGridObjects = transform.Find("GridObjects");
+        for (int i = 0; i < sceneGridObjects.childCount; i++)
+        {
+            GameObject gameObj = sceneGridObjects.GetChild(i).gameObject;
+            IGridObject gridObj = null;
+            switch (gameObj.tag)
+            {
+                case "Player":
+                    gridObj = gameObj.GetComponent<PlayerController>();
+                    PlayerController player = gridObj as PlayerController;
+
+                    // If this is the base player (should only set 1 in the scene), set it here.
+                    if (player.IsBasePlayer)
+                    {
+                        BasePlayer = player;
+                    }
+
+                    break;
+                case "Block":
+                    gridObj = gameObj.GetComponent<BlockController>();
+                    break;
+                default:
+                    throw new System.Exception("Grid Object must have a valid tag!!!");
+            }
+
+            Vector2Int pos = new Vector2Int((int)gameObj.transform.position.x, (int)gameObj.transform.position.y);
+            SetGridObjectPosition(gridObj, pos);
+        }
     }
 
     private Tilemap GetTileMapGrid()
@@ -51,13 +105,24 @@ public class GridManager : MonoBehaviour
         return gridObjects[pos];
     }
 
-    IGridObject GetGridTilemapAt(Vector2Int pos)
+    TileType GetGridTilemapAt(Vector2Int pos)
     {
         if (!gridTilemap.ContainsKey(pos))
         {
-            return null;
+            return TileType.Empty;
         }
         return gridTilemap[pos];
+    }
+
+    // Clear old position in the dict, set new one in the dict, and set position on the gridObj.
+    void SetGridObjectPosition(IGridObject gridObj, Vector2Int pos)
+    {
+        if (gridObjects.ContainsKey(gridObj.GetGridPosition()))
+        {
+            gridObjects.Remove(gridObj.GetGridPosition());
+        }
+        gridObjects[pos] = gridObj; // will overwrite anything beneath it, careful!
+        gridObj.SetGridPosition(pos);
     }
 
     // When the player tries to perform the summon action, return the location the newly summoned player will appear.
@@ -66,13 +131,14 @@ public class GridManager : MonoBehaviour
     {
         // Starting at the first wall tile in front of the player, step through until we reach a regular floor tile
         Vector2Int stepPos = startPos + dir;
-        while (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Wall)
+        TileType tileType = GetGridTilemapAt(stepPos);
+        while (tileType == TileType.Wall)
         {
             stepPos += dir;
         }
 
         // Valid summon if the resultant tile is floor. Otherwise (pit?) return invalid.
-        if (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Floor)
+        if (tileType == TileType.Floor)
         {
             return stepPos;
         }
@@ -91,6 +157,20 @@ public class GridManager : MonoBehaviour
 
         Vector2Int resultingPos = gridObj.GetGridPosition() + moveDir;
         IGridObject resultingPosGridObj = GetGridObjectsAt(resultingPos);
+        TileType resultingPosGridTileType = GetGridTilemapAt(resultingPos);
+
+        // Two Primary checks:
+        // 1. Check grid tilemap for walkable cell
+        // 2. Check grid objects for collision (block, pickup, inactive player...)
+
+        // So basically if it's a wall or pit, we can early return false.
+        if (resultingPosGridTileType == TileType.Wall ||
+            resultingPosGridTileType == TileType.Pit ||
+            resultingPosGridTileType == TileType.Empty)
+        {
+            return false;
+        }
+
         if (resultingPosGridObj == null)
         {
             isValidMove = true;
@@ -111,11 +191,10 @@ public class GridManager : MonoBehaviour
 
         if (isValidMove)
         {
-            gridObj.SetGridPosition(resultingPos);
-
             // Make player take any pickup! Should it be pushable if it's not the player moving into it?
             // Probably best handled in above process logic.
-            if (gridObj.GetTag() == Tag.Player && resultingPosGridObj.GetTag() == Tag.FloorWithPickup)
+            bool cellContainsPickup = resultingPosGridObj != null && resultingPosGridObj.GetTag() == Tag.Pickup;
+            if (gridObj.GetTag() == Tag.Player && cellContainsPickup)
             {
                 // Grant the player summoning. (Too bad if they already had it?)
                 (gridObj as PlayerController).SetSummonReady(true);
@@ -123,6 +202,8 @@ public class GridManager : MonoBehaviour
                 // Remove the pickup from the floor.
                 // RemovePickupFromFloor(resultingPos);
             }
+
+            SetGridObjectPosition(gridObj, resultingPos);
         }
 
         return isValidMove;
@@ -175,6 +256,7 @@ public class GridManager : MonoBehaviour
         // Move input- face the player this way, and potentially move them too.
         if (moveDir != Vector2Int.zero)
         {
+            Debug.Log("Player pressed key. Vec: " + moveDir.ToString());
             activePlayer.SetFaceDir(moveDir);
             ProcessMove(activePlayer, moveDir);
         }
@@ -194,16 +276,16 @@ public class GridManager : MonoBehaviour
         }
         // 2. The player is currently facing a wall.
         Vector2Int faceDir = player.GetFaceDir();
-        IGridObject facingObject = GetGridObjectsAt(player.GetGridPosition() + faceDir);
-        bool isFacingObjectWall = facingObject != null && facingObject.GetTag() == Tag.Wall;
-        if (!isFacingObjectWall)
+        Vector2Int pos = player.GetGridPosition() + faceDir;
+        TileType facingTile = GetGridTilemapAt(pos);
+        if (facingTile != TileType.Wall)
         {
             return;
         }
 
         // Draw dots over each wall tile>
-        Vector2Int stepPos = facingObject.GetGridPosition();
-        while (GetGridObjectsAt(stepPos) != null && GetGridObjectsAt(stepPos).GetTag() == Tag.Wall)
+        Vector2Int stepPos = pos;
+        while (GetGridTilemapAt(stepPos) == TileType.Wall)
         {
             if (Mathf.Abs(faceDir.x) > 0)
             {
