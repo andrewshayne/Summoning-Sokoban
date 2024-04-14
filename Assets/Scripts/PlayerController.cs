@@ -10,13 +10,14 @@ public class PlayerController : MonoBehaviour, IGridObject
     private Vector2Int gridPosition;
     private Vector2 position;
 
-    private int parentId;
-    private bool isSummonReady;
-    private PlayerController summonedPlayer = null;
+    private int parentId = -1;
+    private int childId = -1;
     private Vector2Int faceDir = new Vector2Int(0, -1);
     private Vector2Int summonedAtPos;
+    private bool IsActiveState = true;
 
 
+    public bool isSummonReady = false;
     public bool IsBasePlayer = false;
 
     // Start is called before the first frame update
@@ -31,14 +32,24 @@ public class PlayerController : MonoBehaviour, IGridObject
         
     }
 
-    public void SetParentId(int id)
+    public void SetIsActiveState(bool isActive)
     {
-        parentId = id;
+        IsActiveState = isActive;
     }
 
-    public int GetParentId()
+    public bool GetIsActiveState()
     {
-        return parentId;
+        return IsActiveState;
+    }
+
+    public void SetSummonedAtPos(Vector2Int pos)
+    {
+        summonedAtPos = pos;
+    }
+
+    public Vector2Int GetSummonedAtPosition()
+    {
+        return summonedAtPos;
     }
 
     public bool IsSummonReady()
@@ -107,8 +118,23 @@ public class PlayerController : MonoBehaviour, IGridObject
         return Tag.Player;
     }
 
-    public PlayerController GetSummonedPlayer()
+    public void SetSummonedPlayerId(int playerId)
     {
-        return summonedPlayer;
+        childId = playerId;
+    }
+
+    public int GetSummonedPlayerId()
+    {
+        return childId;
+    }
+
+    public void SetParentId(int playerId)
+    {
+        parentId = playerId;
+    }
+
+    public int getParentId()
+    {
+        return parentId;
     }
 }

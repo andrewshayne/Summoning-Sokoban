@@ -9,19 +9,22 @@ public class GridManager : MonoBehaviour
 {
     private int nextAvailableId = 0;
 
+    private Dictionary<int, IGridObject> gridObjectsById = new Dictionary<int, IGridObject>();
     private Dictionary<Vector2Int, IGridObject> gridObjects = new Dictionary<Vector2Int, IGridObject>();
     private Dictionary<Vector2Int, TileType> gridTilemap = new Dictionary<Vector2Int, TileType>();
+    private Dictionary<Vector2Int, SummoningCircle> circles = new Dictionary<Vector2Int, SummoningCircle>();
 
     private PlayerController BasePlayer = new PlayerController();
+    private PlayerController ActivePlayer;
 
     public GameObject PlayerPrefab;
+    public GameObject SummoningCirclePrefab;
 
     // Start is called before the first frame update
     void Awake()
     {
-        Debug.Log("Hello World!!!");
-
         InitializeGrid();
+        ActivePlayer = BasePlayer;
     }
 
     // Update is called once per frame
@@ -31,18 +34,12 @@ public class GridManager : MonoBehaviour
         DrawSummoningIndicators();
     }
 
-    void InitializePlayers()
-    {
-
-    }
-
     // Initialize the grid using the tilemap in the scene
     void InitializeGrid()
     {
         // Compress the bounds of the tile map.
         Tilemap tilemap = GetTileMapGrid();
         tilemap.CompressBounds();
-
 
         // populate the grid tilemap...
         foreach (var pos in tilemap.cellBounds.allPositionsWithin)
@@ -97,6 +94,7 @@ public class GridManager : MonoBehaviour
             Vector2Int pos = new Vector2Int((int)gameObj.transform.position.x, (int)gameObj.transform.position.y);
             SetGridObjectPosition(gridObj, pos);
             gridObj.SetID(nextAvailableId++);
+            gridObjectsById.Add(gridObj.GetID(), gridObj);
         }
     }
 
@@ -105,6 +103,14 @@ public class GridManager : MonoBehaviour
         return transform.GetChild(0).GetComponent<Tilemap>();
     }
 
+    IGridObject GetGridObjById(int id)
+    {
+        if (!gridObjectsById.ContainsKey(id))
+        {
+            return null;
+        }
+        return gridObjectsById[id];
+    }
 
     IGridObject GetGridObjectsAt(Vector2Int pos)
     {
@@ -168,18 +174,58 @@ public class GridManager : MonoBehaviour
             return;
         }
 
-        // Create a new player at position
+        // No charge! Play a sad noise :'(
+        if (!player.IsSummonReady())
+        {
+            return;
+        }
+
+        // Create a new player and summoning circle at position
         Vector3 summonPos3d = new Vector3(summonPos.x, summonPos.y, 0);
 
+        GameObject newCircleGameObj = Instantiate(SummoningCirclePrefab, summonPos3d, Quaternion.identity);
+        SummoningCircle newCircle = newCircleGameObj.GetComponent<SummoningCircle>();
 
-        // WORK IN PROGRESS
-        //GameObject newPlayer = Instantiate(PlayerPrefab, summonPos3d, Quaternion.identity);
+        GameObject newPlayerGameObj = Instantiate(PlayerPrefab, summonPos3d, Quaternion.identity);
+        PlayerController newPlayer = newPlayerGameObj.GetComponent<PlayerController>();
 
-        // Give the new player a summoning circle
+        // New player
+        newPlayer.SetID(nextAvailableId++);
+        newPlayer.SetParentId(player.GetID());
+        SetGridObjectPosition(newPlayer, summonPos);
 
-        // Set the active player to the current
+        // New circle
+        newCircle.gridPosition = summonPos;
+        newCircle.playerId = newPlayer.GetID();
+        circles.Add(summonPos, newCircle);
 
-        SetGridObjectPosition(player, summonPos);
+        // Old player
+        player.SetSummonReady(false);
+        player.SetSummonedPlayerId(newPlayer.GetID());
+
+        ReplaceActivePlayer(newPlayer);
+    }
+
+    // ONLY call this function if player stepped on their summoning circle
+    void ReturnToSummoner(PlayerController player)
+    {
+        Vector2Int pos = player.GetGridPosition();
+        GameObject playerGameObj = player.gameObject;
+        int parentId = player.getParentId();
+        PlayerController summoner = GetGridObjById(parentId) as PlayerController;
+
+        SummoningCircle circle = circles[pos];
+        GameObject circleGameObj = circle.gameObject;
+
+        // Destroy player and remove from dict
+        gridObjects.Remove(player.GetGridPosition());
+        Destroy(playerGameObj);
+
+        // Destroy circle and remove from dict
+        circles.Remove(pos);
+        Destroy(circleGameObj);
+
+        ReplaceActivePlayer(summoner);
     }
 
 
@@ -240,6 +286,14 @@ public class GridManager : MonoBehaviour
             }
 
             SetGridObjectPosition(gridObj, resultingPos);
+
+            // And now that we moved here, IF the player steps on their circle, return to summoner!
+            if (gridObj.GetTag() == Tag.Player &&
+                circles.ContainsKey(resultingPos) &&
+                circles[resultingPos].playerId == gridObj.GetID())
+            {
+                ReturnToSummoner(gridObj as PlayerController);
+            }
         }
 
         return isValidMove;
@@ -248,16 +302,17 @@ public class GridManager : MonoBehaviour
     // Recursively get the "summoned" player of each player, starting from the "base" player 
     PlayerController GetActivePlayer()
     {
-        PlayerController activePlayer = BasePlayer;
-        if (activePlayer == null)
+        return ActivePlayer;
+    }
+
+    void ReplaceActivePlayer(PlayerController player)
+    {
+        if (ActivePlayer != null)
         {
-            return null;
+            ActivePlayer.SetIsActiveState(false);
         }
-        while (activePlayer.GetSummonedPlayer() != null)
-        {
-            activePlayer = activePlayer.GetSummonedPlayer();
-        }
-        return activePlayer;
+        player.SetIsActiveState(true);
+        ActivePlayer = player;
     }
 
     void ProcessPlayerInput()
