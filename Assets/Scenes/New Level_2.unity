@@ -326,6 +326,8 @@ MonoBehaviour:
   PlayerPrefab: {fileID: 1936829419139544381, guid: c318b9a14b37e0d40bce26a326bd3e73, type: 3}
   SummoningCirclePrefab: {fileID: 7313041776343996779, guid: 8878b983ab924964bb383cb7e89eb6ce, type: 3}
   Dot: {fileID: 0}
+  Circle: {fileID: 0}
+  IndicatorPrefab: {fileID: 5259169684254374362, guid: 55b047ba7e82c7b4a80bdc45d873e422, type: 3}
 --- !u!4 &620598684
 Transform:
   m_ObjectHideFlags: 0

@@ -20,11 +20,18 @@ public class GridManager : MonoBehaviour
     public GameObject PlayerPrefab;
     public GameObject SummoningCirclePrefab;
 
-    // Dots
+    // Indicators
     public Sprite Dot;
     private List<GameObject> Dots = new List<GameObject>();
     private Vector2Int dotPlayerPos;
     private Vector2Int dotPlayerDir;
+    public Sprite Circle;
+    private GameObject circleGameObject;
+
+    // Indicator Prefab
+    public GameObject IndicatorPrefab;
+    private GameObject indicatorCopy;
+
 
     // Start is called before the first frame update
     void Awake()
@@ -39,7 +46,7 @@ public class GridManager : MonoBehaviour
         ProcessPlayerInput();
 
         // Need to uncomment to render indicators
-        //DrawSummoningIndicators();
+        DrawSummoningIndicators();
     }
 
     // Initialize the grid using the tilemap in the scene
@@ -451,9 +458,10 @@ public class GridManager : MonoBehaviour
         if (!player.IsSummonReady())
         {
             Debug.Log("Summon is not ready");
-            DotCleanUp();
+            IndicatorCleanup();
             return;
         }
+
         Vector2Int faceDir = player.GetFaceDir();
         Vector2Int playerPos = player.GetGridPosition();
         Vector2Int facingTilePos = playerPos + faceDir;
@@ -463,7 +471,7 @@ public class GridManager : MonoBehaviour
         if (facingTile != TileType.Wall)
         {
             Debug.Log("Player is not facing a wall");
-            DotCleanUp();
+            IndicatorCleanup();
             return;
         }
 
@@ -474,35 +482,38 @@ public class GridManager : MonoBehaviour
             return;
         }
 
+        // Clean up dots if the player is facing a different direction than previously.
         if (faceDir != dotPlayerDir)
         {
-            DotCleanUp();
+            IndicatorCleanup();
         }
 
         dotPlayerDir = faceDir;
         dotPlayerPos = playerPos;
 
-        DrawIndicator(dotPlayerPos, dotPlayerDir);
 
-        //// // Draw dots over each wall tile>
-        //// Vector2Int stepPos = pos;
-        //// TileType tileType = GetGridTilemapAt(stepPos);
-        //// while (GetGridTilemapAt(stepPos) == TileType.Wall)
-        //// {
-        ////     if (Mathf.Abs(faceDir.x) > 0)
-        ////     {
-        ////         DrawHorizontalIndicator(stepPos);
-        ////     }
-        ////     else
-        ////     {
-        ////         DrawVerticalIndicator(stepPos);
-        ////     }
-        ////     stepPos += faceDir;
-        ////     tileType = GetGridTilemapAt(stepPos);
-        //// }
+        // Draw dots over each wall tile>
+        Vector2Int stepPos = facingTilePos;
+        TileType tileType = GetGridTilemapAt(stepPos);
+        while (tileType == TileType.Wall)
+        {
+            // Will want to using this to determine sprite direction...
+            if (Mathf.Abs(faceDir.x) > 0)
+            {
+                //DrawHorizontalIndicator(stepPos);
+                DrawDotsIndicator(stepPos, faceDir); // REMOVE FACE DIR
+            }
+            else
+            {
+                DrawDotsIndicator(stepPos, faceDir); // REMOVE FACE DIR
+            }
+            stepPos += faceDir;
+            tileType = GetGridTilemapAt(stepPos);
+        }
 
-        //// // Draw summoning indicator after the last wall.
-        //// DrawSummoningPositionIndicator(stepPos);
+        // Draw summoning indicator after the last wall.
+        //DrawSummoningPositionIndicator(stepPos);
+        DrawIndicator(stepPos);
     }
 
     void DrawHorizontalIndicator(Vector2Int pos)
@@ -515,12 +526,28 @@ public class GridManager : MonoBehaviour
         // Implement me
     }
 
-    void DrawSummoningPositionIndicator(Vector2Int pos)
+
+    // Using the prefab...
+    void DrawIndicator(Vector2Int pos)
     {
-        // Implement me
+        indicatorCopy = Instantiate(IndicatorPrefab);
+
+        // Handle position for Dots...
+
+        // Handle position for Circle...
+        indicatorCopy.transform.GetChild(1).position = new Vector3Int(pos.x, pos.y, 0);
     }
 
-    void DrawIndicator(Vector2Int pos, Vector2Int dir)
+    void DrawSummoningPositionIndicator(Vector2Int pos)
+    {
+        GameObject g = new GameObject();
+        g.transform.position = new Vector3Int(pos.x, pos.y, 0);
+        var s = g.AddComponent<SpriteRenderer>();
+        s.sprite = Circle;
+        circleGameObject = g;
+    }
+
+    void DrawDotsIndicator(Vector2Int pos, Vector2Int dir)
     {
         GameObject g = new GameObject();
         g.transform.position = new Vector3Int(pos.x, pos.y, 0);
@@ -528,7 +555,7 @@ public class GridManager : MonoBehaviour
         s.sprite = Dot;
         Dots.Add(g);
     }
-    private void DotCleanUp()
+    private void IndicatorCleanup()
     {
         Debug.Log("Destroying previously drawn dots");
         // Destroy previously drawn dots
@@ -538,5 +565,11 @@ public class GridManager : MonoBehaviour
         }
         Debug.Log($"All {Dots.Count} dots destroyed");
         Dots = new List<GameObject>();
+
+        Destroy(circleGameObject);
+        circleGameObject = null;
+
+        Destroy(indicatorCopy);
+        indicatorCopy = null;
     }
 }
