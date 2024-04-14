@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 2
   tags:
   - Block
+  - SummoningCircle
   layers:
   - Default
   - TransparentFX

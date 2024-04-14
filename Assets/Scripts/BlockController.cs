@@ -32,6 +32,11 @@ public class BlockController : MonoBehaviour, IGridObject
         return id;
     }
 
+    public void SetID(int id)
+    {
+        this.id = id;
+    }
+
     public bool GetIsPushable()
     {
         return true;
@@ -45,6 +50,8 @@ public class BlockController : MonoBehaviour, IGridObject
     public void SetGridPosition(Vector2Int pos)
     {
         gridPosition = pos;
+
+        transform.position = new Vector3(pos.x, pos.y, 0);
     }
 
     public Tag GetTag()

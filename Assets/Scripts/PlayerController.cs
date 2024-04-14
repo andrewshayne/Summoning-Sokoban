@@ -10,9 +10,12 @@ public class PlayerController : MonoBehaviour, IGridObject
     private Vector2Int gridPosition;
     private Vector2 position;
 
+    private int parentId;
     private bool isSummonReady;
     private PlayerController summonedPlayer = null;
     private Vector2Int faceDir = new Vector2Int(0, -1);
+    private Vector2Int summonedAtPos;
+
 
     public bool IsBasePlayer = false;
 
@@ -26,6 +29,16 @@ public class PlayerController : MonoBehaviour, IGridObject
     void Update()
     {
         
+    }
+
+    public void SetParentId(int id)
+    {
+        parentId = id;
+    }
+
+    public int GetParentId()
+    {
+        return parentId;
     }
 
     public bool IsSummonReady()
@@ -46,6 +59,14 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetFaceDir(Vector2Int dir)
     {
         faceDir = dir;
+        if (faceDir == Vector2.right)
+        {
+            GetComponent<SpriteRenderer>().flipX = true;
+        }
+        else
+        {
+            GetComponent<SpriteRenderer>().flipX = false;
+        }
     }
 
     // IGridObject Interface Implementations
@@ -53,6 +74,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     {
         return gridPosition;
     }
+
     public Vector2 GetTruePosition()
     {
         return position;
@@ -61,6 +83,11 @@ public class PlayerController : MonoBehaviour, IGridObject
     public int GetID()
     {
         return id;
+    }
+
+    public void SetID(int id)
+    {
+        this.id = id;
     }
 
     public void SetGridPosition(Vector2Int pos)

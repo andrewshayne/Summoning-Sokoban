@@ -8,6 +8,7 @@ namespace Assets.Scripts
     public interface IGridObject
     {
         int GetID();
+        void SetID(int id);
         Vector2Int GetGridPosition();
         Vector2 GetTruePosition();
         void SetGridPosition(Vector2Int pos);

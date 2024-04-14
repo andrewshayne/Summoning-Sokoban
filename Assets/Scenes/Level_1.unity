@@ -277,6 +277,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f11f0e6ddc467174890f2be2cade0402, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  PlayerPrefab: {fileID: 0}
 --- !u!4 &620598684
 Transform:
   m_ObjectHideFlags: 0
@@ -320,7 +321,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9047765031933648036, guid: 185a093e3345af14a8a06f286e55c59c, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -1
+      value: -2
       objectReference: {fileID: 0}
     - target: {fileID: 9047765031933648036, guid: 185a093e3345af14a8a06f286e55c59c, type: 3}
       propertyPath: m_LocalPosition.z
@@ -2890,6 +2891,10 @@ PrefabInstance:
     - target: {fileID: 1936829419139544381, guid: c318b9a14b37e0d40bce26a326bd3e73, type: 3}
       propertyPath: m_TagString
       value: Player
+      objectReference: {fileID: 0}
+    - target: {fileID: 2529133382880041797, guid: c318b9a14b37e0d40bce26a326bd3e73, type: 3}
+      propertyPath: m_FlipY
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5469967156737788909, guid: c318b9a14b37e0d40bce26a326bd3e73, type: 3}
       propertyPath: m_RootOrder

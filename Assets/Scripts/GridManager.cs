@@ -7,10 +7,14 @@ using Assets.Scripts;
 
 public class GridManager : MonoBehaviour
 {
+    private int nextAvailableId = 0;
+
     private Dictionary<Vector2Int, IGridObject> gridObjects = new Dictionary<Vector2Int, IGridObject>();
     private Dictionary<Vector2Int, TileType> gridTilemap = new Dictionary<Vector2Int, TileType>();
 
     private PlayerController BasePlayer = new PlayerController();
+
+    public GameObject PlayerPrefab;
 
     // Start is called before the first frame update
     void Awake()
@@ -25,6 +29,11 @@ public class GridManager : MonoBehaviour
     {
         ProcessPlayerInput();
         DrawSummoningIndicators();
+    }
+
+    void InitializePlayers()
+    {
+
     }
 
     // Initialize the grid using the tilemap in the scene
@@ -87,6 +96,7 @@ public class GridManager : MonoBehaviour
 
             Vector2Int pos = new Vector2Int((int)gameObj.transform.position.x, (int)gameObj.transform.position.y);
             SetGridObjectPosition(gridObj, pos);
+            gridObj.SetID(nextAvailableId++);
         }
     }
 
@@ -135,6 +145,7 @@ public class GridManager : MonoBehaviour
         while (tileType == TileType.Wall)
         {
             stepPos += dir;
+            tileType = GetGridTilemapAt(stepPos);
         }
 
         // Valid summon if the resultant tile is floor. Otherwise (pit?) return invalid.
@@ -144,6 +155,31 @@ public class GridManager : MonoBehaviour
         }
 
         return new Vector2Int(999,999);
+    }
+
+    void DoSummonAction()
+    {
+        PlayerController player = GetActivePlayer();
+        Vector2Int summonPos = GetSummonLocation(player.GetGridPosition(), player.GetFaceDir());
+
+        // Invalid summon.
+        if (summonPos == new Vector2Int(999,999))
+        {
+            return;
+        }
+
+        // Create a new player at position
+        Vector3 summonPos3d = new Vector3(summonPos.x, summonPos.y, 0);
+
+
+        // WORK IN PROGRESS
+        //GameObject newPlayer = Instantiate(PlayerPrefab, summonPos3d, Quaternion.identity);
+
+        // Give the new player a summoning circle
+
+        // Set the active player to the current
+
+        SetGridObjectPosition(player, summonPos);
     }
 
 
@@ -232,8 +268,14 @@ public class GridManager : MonoBehaviour
 
         List<KeyCode> keyWasdDirs = new List<KeyCode>{KeyCode.W, KeyCode.D, KeyCode.S, KeyCode.A};
         List<KeyCode> keyArrowDirs = new List<KeyCode>{KeyCode.UpArrow, KeyCode.RightArrow, KeyCode.DownArrow, KeyCode.LeftArrow};
-
         Vector2Int moveDir = Vector2Int.zero;
+
+        // Handle summon action
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            DoSummonAction();
+            return;
+        }
 
         // switch case on keypress to determine action...
         if (Input.GetKeyDown(keyWasdDirs[0]) || Input.GetKeyDown(keyArrowDirs[0]))
@@ -285,6 +327,7 @@ public class GridManager : MonoBehaviour
 
         // Draw dots over each wall tile>
         Vector2Int stepPos = pos;
+        TileType tileType = GetGridTilemapAt(stepPos);
         while (GetGridTilemapAt(stepPos) == TileType.Wall)
         {
             if (Mathf.Abs(faceDir.x) > 0)
@@ -296,6 +339,7 @@ public class GridManager : MonoBehaviour
                 DrawVerticalIndicator(stepPos);
             }
             stepPos += faceDir;
+            tileType = GetGridTilemapAt(stepPos);
         }
 
         // Draw summoning indicator after the last wall.
