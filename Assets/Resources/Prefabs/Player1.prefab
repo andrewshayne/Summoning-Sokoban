@@ -76,7 +76,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: 8f28504032c5098479a73873f5fe6d20, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 4eb0a909fd942ed45b73d05ba86d9770, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -101,6 +101,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isSummonReady: 0
   IsBasePlayer: 1
+  playerColors:
+  - {r: 1, g: 0, b: 0.8991847, a: 0}
+  - {r: 0.44477654, g: 0, b: 1, a: 0}
+  - {r: 0, g: 0.55120516, b: 1, a: 0}
+  - {r: 0, g: 1, b: 0.54806757, a: 0}
   animator: {fileID: 7859547659729347076}
 --- !u!95 &7859547659729347076
 Animator:

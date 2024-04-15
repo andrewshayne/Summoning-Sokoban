@@ -20,17 +20,16 @@ public class GridManager : MonoBehaviour
     public GameObject PlayerPrefab;
     public GameObject SummoningCirclePrefab;
 
-    // Indicators
-    public Sprite Dot;
-    private List<GameObject> Dots = new List<GameObject>();
+    // Indicator info
     private Vector2Int dotPlayerPos;
     private Vector2Int dotPlayerDir;
-    public Sprite Circle;
-    private GameObject circleGameObject;
 
     // Indicator Prefab
     public GameObject IndicatorPrefab;
     private GameObject indicatorCopy;
+
+    public GameObject IndicatorDotPrefab;
+    private List<GameObject> indicatorDotCopies = new List<GameObject>();
 
 
     // Start is called before the first frame update
@@ -221,6 +220,7 @@ public class GridManager : MonoBehaviour
 
         // New player
         newPlayer.SetID(nextAvailableId++);
+        newPlayer.SetColorID(player.GetColorID() + 1);
         newPlayer.SetParentId(player.GetID());
         gridObjectsById.Add(newPlayer.GetID(), newPlayer);
         SetGridObjectPosition(newPlayer, summonPos);
@@ -491,29 +491,9 @@ public class GridManager : MonoBehaviour
         dotPlayerDir = faceDir;
         dotPlayerPos = playerPos;
 
-
-        // Draw dots over each wall tile>
-        Vector2Int stepPos = facingTilePos;
-        TileType tileType = GetGridTilemapAt(stepPos);
-        while (tileType == TileType.Wall)
-        {
-            // Will want to using this to determine sprite direction...
-            if (Mathf.Abs(faceDir.x) > 0)
-            {
-                //DrawHorizontalIndicator(stepPos);
-                DrawDotsIndicator(stepPos, faceDir); // REMOVE FACE DIR
-            }
-            else
-            {
-                DrawDotsIndicator(stepPos, faceDir); // REMOVE FACE DIR
-            }
-            stepPos += faceDir;
-            tileType = GetGridTilemapAt(stepPos);
-        }
-
         // Draw summoning indicator after the last wall.
         //DrawSummoningPositionIndicator(stepPos);
-        DrawIndicator(stepPos);
+        DrawIndicator(facingTilePos, faceDir);
     }
 
     void DrawHorizontalIndicator(Vector2Int pos)
@@ -528,46 +508,48 @@ public class GridManager : MonoBehaviour
 
 
     // Using the prefab...
-    void DrawIndicator(Vector2Int pos)
+    void DrawIndicator(Vector2Int stepPos, Vector2Int faceDir)
     {
         indicatorCopy = Instantiate(IndicatorPrefab);
 
+        bool isHorizontal = Mathf.Abs(faceDir.x) > 0;
+
         // Handle position for Dots...
+        // Draw dots over each wall tile>
+        TileType tileType = GetGridTilemapAt(stepPos);
+        while (tileType == TileType.Wall)
+        {
+            DrawDotIndicator(stepPos, isHorizontal); // REMOVE FACE DIR
+
+            stepPos += faceDir;
+            tileType = GetGridTilemapAt(stepPos);
+        }
 
         // Handle position for Circle...
-        indicatorCopy.transform.GetChild(1).position = new Vector3Int(pos.x, pos.y, 0);
+        indicatorCopy.transform.GetChild(1).position = new Vector3Int(stepPos.x, stepPos.y, 0);
     }
 
-    void DrawSummoningPositionIndicator(Vector2Int pos)
+    void DrawDotIndicator(Vector2Int pos, bool isHorizontal)
     {
-        GameObject g = new GameObject();
-        g.transform.position = new Vector3Int(pos.x, pos.y, 0);
-        var s = g.AddComponent<SpriteRenderer>();
-        s.sprite = Circle;
-        circleGameObject = g;
+        GameObject dotCopy = Instantiate(IndicatorDotPrefab);
+        dotCopy.transform.position = new Vector3Int(pos.x, pos.y, 0);
+        if (!isHorizontal)
+        {
+            dotCopy.transform.Rotate(Vector3.forward, 90);
+        }
+        indicatorDotCopies.Add(dotCopy);
     }
 
-    void DrawDotsIndicator(Vector2Int pos, Vector2Int dir)
-    {
-        GameObject g = new GameObject();
-        g.transform.position = new Vector3Int(pos.x, pos.y, 0);
-        var s = g.AddComponent<SpriteRenderer>();
-        s.sprite = Dot;
-        Dots.Add(g);
-    }
     private void IndicatorCleanup()
     {
         Debug.Log("Destroying previously drawn dots");
         // Destroy previously drawn dots
-        for (int i = 0; i < Dots.Count; i++)
+        for (int i = 0; i < indicatorDotCopies.Count; i++)
         {
-            Destroy(Dots[i]);
+            Destroy(indicatorDotCopies[i]);
         }
-        Debug.Log($"All {Dots.Count} dots destroyed");
-        Dots = new List<GameObject>();
-
-        Destroy(circleGameObject);
-        circleGameObject = null;
+        Debug.Log($"All {indicatorDotCopies.Count} dots destroyed");
+        indicatorDotCopies = new List<GameObject>();
 
         Destroy(indicatorCopy);
         indicatorCopy = null;

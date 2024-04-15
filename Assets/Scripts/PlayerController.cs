@@ -7,6 +7,7 @@ using Assets.Scripts;
 public class PlayerController : MonoBehaviour, IGridObject
 {
     private int id;
+    private int colorId;
     private Vector2Int gridPosition;
     private Vector2 position;
 
@@ -19,6 +20,8 @@ public class PlayerController : MonoBehaviour, IGridObject
 
     public bool isSummonReady = false;
     public bool IsBasePlayer = false;
+
+    public List<Color> playerColors;
 
     // Animation
     public Animator animator;
@@ -40,7 +43,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     // Start is called before the first frame update
     void Start()
     {
-
+        //GetComponent<SpriteRenderer>().material.color = playerColors[colorId];
     }
 
     // Update is called once per frame
@@ -130,6 +133,16 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetID(int id)
     {
         this.id = id;
+    }
+
+    public int GetColorID()
+    {
+        return colorId;
+    }
+
+    public void SetColorID(int id)
+    {
+        colorId = id;
     }
 
     public void SetGridPosition(Vector2Int pos)
