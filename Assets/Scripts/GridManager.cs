@@ -2,11 +2,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.SceneManagement;
+using UnityEngine.Events;
 
 using Assets.Scripts;
 
 public class GridManager : MonoBehaviour
 {
+    public bool IsHubWorld = false;
+
     private int nextAvailableId = 0;
 
     private Dictionary<int, IGridObject> gridObjectsById = new Dictionary<int, IGridObject>();
@@ -19,6 +23,7 @@ public class GridManager : MonoBehaviour
 
     public GameObject PlayerPrefab;
     public GameObject SummoningCirclePrefab;
+    public List<Color> playerColors;
 
     // Indicator info
     private Vector2Int dotPlayerPos;
@@ -31,12 +36,88 @@ public class GridManager : MonoBehaviour
     public GameObject IndicatorDotPrefab;
     private List<GameObject> indicatorDotCopies = new List<GameObject>();
 
+    private LevelManager levelManager;
+    private bool isLevelComplete = false;
+
+    private Camera camera;
+    private float cameraSpeed = 2.0f; 
+
+    // Emit the victory event!
+
+    // Emit the reset event!
+
+    private Dictionary<Vector2Int,string> HubWorldLevels = new Dictionary<Vector2Int,string>();
+
 
     // Start is called before the first frame update
     void Awake()
     {
         InitializeGrid();
         ActivePlayer = BasePlayer;
+        camera = FindObjectOfType<Camera>();
+    }
+
+    // This is a hack because unity is bullshitting.
+    IEnumerator DelaySetHubWorldPlayerPosition(Vector3 newPos)
+    {
+        yield return new WaitForSeconds(0.1f);
+        //ActivePlayer.gameObject.transform.position = newPos;
+        //camera.transform.position = newPos;
+        ActivePlayer.SetMoveSpeed(8f);
+        cameraSpeed = 2f;
+    }
+
+    private void Start()
+    {
+        levelManager = FindObjectOfType<LevelManager>();
+
+        // Handle setting the player's hub world position here, and not in the usual init spot
+        if (IsHubWorld)
+        {
+            ActivePlayer.SetGridPosition(levelManager.HubWorldPlayerPosition);
+            IGridObject gridObj = ActivePlayer;
+            Vector3 newPos = new Vector3(gridObj.GetGridPosition().x, gridObj.GetGridPosition().y, 0);
+
+            // try another hack... set lerp speeds really fast!
+            ActivePlayer.SetMoveSpeed(900f);
+            cameraSpeed = 900f;
+            StartCoroutine(DelaySetHubWorldPlayerPosition(newPos));
+
+            SetGridObjectPosition(gridObj, gridObj.GetGridPosition());
+            gridObj.SetID(nextAvailableId++);
+            gridObjectsById.Add(gridObj.GetID(), gridObj);
+        }
+
+        Debug.Log("Completed Levels: ");
+        foreach (string name in levelManager.CompletedLevels)
+        {
+            Debug.Log(" - " + name);
+        }
+
+        if (IsHubWorld)
+        {
+            // Place camera directly on player.
+            camera.transform.position = ActivePlayer.transform.position;
+
+            Transform levelParent = transform.Find("LevelTeleporters");
+
+            // Populate the dict with level names...
+            for (int i = 0; i < levelParent.childCount; i++)
+            {
+                Transform levelInfoTransform = levelParent.GetChild(i);
+                LevelInfo levelInfo = levelInfoTransform.GetComponent<LevelInfo>();
+
+                HubWorldLevels.Add(levelInfo.pos, levelInfo.levelName);
+
+                GameObject pendingSigil = levelInfoTransform.GetChild(0).gameObject;
+                GameObject completeSigil = levelInfoTransform.GetChild(1).gameObject;
+                if (levelManager.CompletedLevels.Contains(levelInfo.levelName))
+                {
+                    pendingSigil.SetActive(false);
+                    completeSigil.SetActive(true);
+                }
+            }
+        }
     }
 
     // Update is called once per frame
@@ -45,8 +126,24 @@ public class GridManager : MonoBehaviour
         ProcessPlayerInput();
 
         // Need to uncomment to render indicators
-        DrawSummoningIndicators();
+        if (ShouldAllowSummon(ActivePlayer.GetGridPosition(), ActivePlayer.GetFaceDir()))
+        {
+            DrawSummoningIndicators();
+        }
+
+        // Only in the hubworld, follow the player with the camera
+        if (IsHubWorld)
+        {
+            float interpolation = cameraSpeed * Time.deltaTime;
+        
+            Vector3 position = camera.transform.position;
+            position.y = Mathf.Lerp(position.y, ActivePlayer.transform.position.y, interpolation);
+            position.x = Mathf.Lerp(position.x, ActivePlayer.transform.position.x, interpolation);
+        
+            camera.transform.position = position;
+        }
     }
+
 
     // Initialize the grid using the tilemap in the scene
     void InitializeGrid()
@@ -113,6 +210,9 @@ public class GridManager : MonoBehaviour
                 case "Block":
                     gridObj = gameObj.GetComponent<BlockController>();
                     break;
+                case "Statue":
+                    gridObj = gameObj.GetComponent<StatueController>();
+                    break;
                 case "Pickup":
                     gridObj = gameObj.GetComponent<PickupController>();
                     break;
@@ -121,15 +221,29 @@ public class GridManager : MonoBehaviour
             }
 
             Vector2Int pos = new Vector2Int((int)gameObj.transform.position.x, (int)gameObj.transform.position.y);
-            SetGridObjectPosition(gridObj, pos);
-            gridObj.SetID(nextAvailableId++);
-            gridObjectsById.Add(gridObj.GetID(), gridObj);
+            if (gridObj.GetTag() != Tag.Player || !IsHubWorld)
+            {
+                SetGridObjectPosition(gridObj, pos);
+                gridObj.SetID(nextAvailableId++);
+                gridObjectsById.Add(gridObj.GetID(), gridObj);
+            }
         }
+
+        // Base player circle
+        GameObject CircleGameObj = transform.Find("SummoningCircle").gameObject;
+        SummoningCircle circle = CircleGameObj.GetComponent<SummoningCircle>();
+
+        circle.gridPosition = new Vector2Int((int)CircleGameObj.transform.position.x, (int)CircleGameObj.transform.position.y);
+        circle.playerId = BasePlayer.GetID();
+        circle.GetComponent<SpriteRenderer>().color = playerColors[BasePlayer.GetColorID()];
+        ParticleSystem.MainModule ma = circle.transform.GetChild(0).GetComponent<ParticleSystem>().main;
+        ma.startColor = playerColors[BasePlayer.GetColorID()];
+        circles.Add(circle.gridPosition, circle);
     }
 
     private Tilemap GetTileMapGrid()
     {
-        return transform.GetChild(0).GetComponent<Tilemap>();
+        return transform.Find("Tilemap").GetComponent<Tilemap>();
     }
 
     IGridObject GetGridObjById(int id)
@@ -177,10 +291,13 @@ public class GridManager : MonoBehaviour
         // Starting at the first wall tile in front of the player, step through until we reach a regular floor tile
         Vector2Int stepPos = startPos + dir;
         TileType tileType = GetGridTilemapAt(stepPos);
-        while (tileType == TileType.Wall)
+        IGridObject objAtStep = GetGridObjectsAt(stepPos);
+
+        while (tileType == TileType.Wall || (objAtStep != null && objAtStep.GetTag() == Tag.Block))
         {
             stepPos += dir;
             tileType = GetGridTilemapAt(stepPos);
+            objAtStep = GetGridObjectsAt(stepPos);
         }
 
         // Valid summon if the resultant tile is floor. Otherwise (pit?) return invalid.
@@ -222,13 +339,18 @@ public class GridManager : MonoBehaviour
         newPlayer.SetID(nextAvailableId++);
         newPlayer.SetColorID(player.GetColorID() + 1);
         newPlayer.SetParentId(player.GetID());
+        newPlayer.SetSummonReady(false);
         gridObjectsById.Add(newPlayer.GetID(), newPlayer);
         SetGridObjectPosition(newPlayer, summonPos);
 
         // New circle
         newCircle.gridPosition = summonPos;
         newCircle.playerId = newPlayer.GetID();
+        newCircle.GetComponent<SpriteRenderer>().color = playerColors[newPlayer.GetColorID()];
+        ParticleSystem.MainModule ma = newCircle.transform.GetChild(0).GetComponent<ParticleSystem>().main;
+        ma.startColor = playerColors[newPlayer.GetColorID()];
         circles.Add(summonPos, newCircle);
+
 
         // Old player
         player.SetSummonReady(false);
@@ -236,12 +358,33 @@ public class GridManager : MonoBehaviour
 
         ReplaceActivePlayer(newPlayer);
 
+        StartCoroutine(SummonNewPlayer(player));
+        StartCoroutine(IsBeingSummonedPlayer(newPlayer));
+
         return true;
     }
 
     // ONLY call this function if player stepped on their summoning circle
     void ReturnToSummoner(PlayerController player)
     {
+        if (player.getParentId() == -1 && player.GetIsActiveState())
+        {
+            // ACTIVE Base player has stepped on their circle! Level win!
+            isLevelComplete = true;
+
+            // freeze! Let's load you outta here!
+            if (!IsHubWorld && isLevelComplete)
+            {
+                string currentSceneName = SceneManager.GetActiveScene().name;
+                levelManager.CompletedLevels.Add(currentSceneName);
+
+                string hubWorldSceneName = "HUB";
+                levelManager.LoadLevel(hubWorldSceneName);
+            }
+
+            return;
+        }
+
         Vector2Int pos = player.GetGridPosition();
         GameObject playerGameObj = player.gameObject;
         int parentId = player.getParentId();
@@ -252,15 +395,47 @@ public class GridManager : MonoBehaviour
 
         // Destroy player and remove from dict
         gridObjects.Remove(player.GetGridPosition());
-        Destroy(playerGameObj);
+        // Destroy(playerGameObj);
 
         // Destroy circle and remove from dict
         circles.Remove(pos);
         Destroy(circleGameObj);
 
         ReplaceActivePlayer(summoner);
+
+
+        // Destroy the player at the end of the poof!
+        StartCoroutine(PoofReturnedPlayer(player, summoner));
     }
 
+    IEnumerator PoofReturnedPlayer(PlayerController player, PlayerController summoner)
+    {
+        IncrementLockingCounter();
+
+        // set the player invisible and poof, then destroy after set time
+        player.GetComponent<SpriteRenderer>().enabled = false;
+        player.transform.Find("poofer").GetComponent<ParticleSystem>().Play();
+        yield return new WaitForSeconds(0.6f);
+        Destroy(player.gameObject);
+
+        // NOW check if the current summoner is standing on their sigil!
+        if (circles.ContainsKey(summoner.GetGridPosition()) &&
+            circles[summoner.GetGridPosition()].playerId == summoner.GetID())
+        {
+            ReturnToSummoner(summoner);
+        }
+
+        DecrementLockingCounter();
+    }
+
+    IEnumerator DelayedReturnSummoner(PlayerController player)
+    {
+        IncrementLockingCounter();
+        yield return new WaitForSeconds(1f);
+        DecrementLockingCounter();
+
+        ReturnToSummoner(player);
+    }
 
     bool ProcessMove(IGridObject gridObj, Vector2Int moveDir)
     {
@@ -289,6 +464,11 @@ public class GridManager : MonoBehaviour
         if (resultingPosGridObj == null)
         {
             isValidMove = true;
+        }
+        // Can't move into statue
+        else if (resultingPosGridObj.GetTag() == Tag.Statue)
+        {
+            isValidMove = false;
         }
         // Push block
         else if (resultingPosGridObj.GetTag() == Tag.Block)
@@ -338,6 +518,7 @@ public class GridManager : MonoBehaviour
 
             // And now that we moved here, IF the player steps on their circle, return to summoner!
             if (isPlayer &&
+                (gridObj as PlayerController).GetIsActiveState() &&
                 circles.ContainsKey(resultingPos) &&
                 circles[resultingPos].playerId == gridObj.GetID())
             {
@@ -366,6 +547,25 @@ public class GridManager : MonoBehaviour
 
     void ProcessPlayerInput()
     {
+        // Things to be called only from non-hub world
+        if (!IsHubWorld)
+        {
+            // Reset
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                string currentSceneName = SceneManager.GetActiveScene().name;
+                levelManager.LoadLevel(currentSceneName);
+            }
+
+            // Escape to hub world
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.X))
+            {
+                string hubWorldSceneName = "HUB";
+                levelManager.LoadLevel(hubWorldSceneName);
+            }
+        }
+
+
         // Don't process player input while something is happening.
         if (lockCounter > 0)
         {
@@ -381,15 +581,40 @@ public class GridManager : MonoBehaviour
         Vector2Int moveDir = Vector2Int.zero;
 
         // Handle summon action
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.Space) && !IsHubWorld)
         {
-            bool isValidSummon = DoSummonAction();
-            if (isValidSummon)
+            bool isValidSummon = false;
+            if (ShouldAllowSummon(activePlayer.GetGridPosition(), activePlayer.GetFaceDir()))
             {
-                StartCoroutine(SummonNewPlayer());
+                isValidSummon = DoSummonAction();
+                if (isValidSummon)
+                {
+                    IndicatorCleanup();
+                }
             }
             return;
         }
+
+        // Summon action is different for hub world!
+        if (Input.GetKeyDown(KeyCode.Space) && IsHubWorld)
+        {
+            // poof the player but don't spawn a new one...
+            StartCoroutine(SummonNewPlayer(ActivePlayer));
+
+            // check for level indicator in front of player, if so, it's valid!
+            Vector2Int facingPos = ActivePlayer.GetGridPosition() + activePlayer.GetFaceDir();
+            if (HubWorldLevels.ContainsKey(facingPos))
+            {
+                // save current player position
+                levelManager.HubWorldPlayerPosition = activePlayer.GetGridPosition();
+
+                // get the level name and load in!
+                levelManager.LoadLevel(HubWorldLevels[facingPos]);
+                isLevelComplete = true;
+                return;
+            }
+        }
+
 
         // switch case on keypress to determine action...
         if (Input.GetKeyDown(keyWasdDirs[0]) || Input.GetKeyDown(keyArrowDirs[0]))
@@ -412,16 +637,27 @@ public class GridManager : MonoBehaviour
         // Move input- face the player this way, and potentially move them too.
         if (moveDir != Vector2Int.zero)
         {
+            Vector2Int prevFaceDir = activePlayer.GetFaceDir();
             activePlayer.SetFaceDir(moveDir);
             bool isValidMove = ProcessMove(activePlayer, moveDir);
             if (isValidMove)
             {
+                IndicatorCleanup();
                 StartCoroutine(MovePlayer());
+            }
+            // if we're facing the same way, and didn't move, don't cleanup
+            else
+            {
+                if (activePlayer.GetFaceDir() != prevFaceDir)
+                {
+                    IndicatorCleanup();
+                }
             }
         }
     }
 
-    private float InputLockDuration = 0.2f;
+    private float InputLockDuration = 0.15f;
+    private float SummonLockDuration = 0.3f;
     public IEnumerator MovePlayer()
     {
         IncrementLockingCounter();
@@ -430,12 +666,21 @@ public class GridManager : MonoBehaviour
         ActivePlayer.SetAnimatorMovingState(false);
         DecrementLockingCounter();
     }
-    public IEnumerator SummonNewPlayer()
+    public IEnumerator SummonNewPlayer(PlayerController player)
     {
         IncrementLockingCounter();
-        ActivePlayer.SetAnimatorSummoningState(true);
-        yield return new WaitForSeconds(InputLockDuration);
-        ActivePlayer.SetAnimatorSummoningState(false);
+        player.SetAnimatorSummoningState(true);
+        yield return new WaitForSeconds(SummonLockDuration);
+        player.SetAnimatorSummoningState(false);
+        DecrementLockingCounter();
+    }
+
+    public IEnumerator IsBeingSummonedPlayer(PlayerController player)
+    {
+        IncrementLockingCounter();
+        player.SetAnimatorBeingSummonedState(true);
+        yield return new WaitForSeconds(SummonLockDuration);
+        player.SetAnimatorBeingSummonedState(false);
         DecrementLockingCounter();
     }
 
@@ -457,8 +702,7 @@ public class GridManager : MonoBehaviour
         // Early return if the player doesn't have summon ready.
         if (!player.IsSummonReady())
         {
-            Debug.Log("Summon is not ready");
-            IndicatorCleanup();
+            //Debug.Log("Summon is not ready");
             return;
         }
 
@@ -466,26 +710,26 @@ public class GridManager : MonoBehaviour
         Vector2Int playerPos = player.GetGridPosition();
         Vector2Int facingTilePos = playerPos + faceDir;
         TileType facingTile = GetGridTilemapAt(facingTilePos);
+        IGridObject facingGridObj = GetGridObjectsAt(facingTilePos);
+        bool isFacingBlock = facingGridObj != null && facingGridObj.GetTag() == Tag.Block;
 
-        // Early return if the player isn't facing a wall.
-        if (facingTile != TileType.Wall)
+        // Early return if the player isn't facing a wall (or a block).
+        if (facingTile != TileType.Wall && !isFacingBlock)
         {
-            Debug.Log("Player is not facing a wall");
-            IndicatorCleanup();
+            //Debug.Log("Player is not facing a wall");
             return;
         }
 
         // Early return if the player is looking at a spot that already has the indicator.
         if (faceDir == dotPlayerDir && dotPlayerPos == playerPos)
         {
-            Debug.Log("Player in same position, no need to draw dots");
+            //Debug.Log("Player in same position, no need to draw dots");
             return;
         }
 
         // Clean up dots if the player is facing a different direction than previously.
         if (faceDir != dotPlayerDir)
         {
-            IndicatorCleanup();
         }
 
         dotPlayerDir = faceDir;
@@ -494,16 +738,6 @@ public class GridManager : MonoBehaviour
         // Draw summoning indicator after the last wall.
         //DrawSummoningPositionIndicator(stepPos);
         DrawIndicator(facingTilePos, faceDir);
-    }
-
-    void DrawHorizontalIndicator(Vector2Int pos)
-    {
-        // Implement me
-    }
-
-    void DrawVerticalIndicator(Vector2Int pos)
-    {
-        // Implement me
     }
 
 
@@ -517,12 +751,15 @@ public class GridManager : MonoBehaviour
         // Handle position for Dots...
         // Draw dots over each wall tile>
         TileType tileType = GetGridTilemapAt(stepPos);
-        while (tileType == TileType.Wall)
+        IGridObject objAtStep = GetGridObjectsAt(stepPos);
+
+        while (tileType == TileType.Wall || (objAtStep != null && objAtStep.GetTag() == Tag.Block))
         {
             DrawDotIndicator(stepPos, isHorizontal); // REMOVE FACE DIR
 
             stepPos += faceDir;
             tileType = GetGridTilemapAt(stepPos);
+            objAtStep = GetGridObjectsAt(stepPos);
         }
 
         // Handle position for Circle...
@@ -540,15 +777,63 @@ public class GridManager : MonoBehaviour
         indicatorDotCopies.Add(dotCopy);
     }
 
+    // Check start to finish if this is a valid summon path
+    bool ShouldAllowSummon(Vector2Int playerPos, Vector2Int faceDir)
+    {
+        Vector2Int stepPos = playerPos + faceDir;
+        TileType initialTile = GetGridTilemapAt(stepPos);
+        IGridObject initialObj = GetGridObjectsAt(stepPos);
+        bool isInitialObjBlock = (initialObj != null && initialObj.GetTag() == Tag.Block);
+
+        if (initialTile != TileType.Wall && !isInitialObjBlock)
+        {
+            return false;
+        }
+
+        TileType tileType = GetGridTilemapAt(stepPos);
+        IGridObject objAtStep = GetGridObjectsAt(stepPos);
+
+        while (tileType == TileType.Wall || (objAtStep != null && objAtStep.GetTag() == Tag.Block))
+        {
+            stepPos += faceDir;
+            tileType = GetGridTilemapAt(stepPos);
+            objAtStep = GetGridObjectsAt(stepPos);
+        }
+
+        IGridObject gridObject = GetGridObjectsAt(stepPos);
+        if (gridObject != null)
+        {
+        // can't move onto player
+            if (gridObject.GetTag() == Tag.Player)
+            {
+                return false;
+            }
+            // can't move onto block
+            if (gridObject.GetTag() == Tag.Block)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
     private void IndicatorCleanup()
     {
-        Debug.Log("Destroying previously drawn dots");
+        //// clean up as long as we weren't previously facing this way
+        //if (dotPlayerDir == ActivePlayer.GetFaceDir())
+        //{
+        //    return;
+        //}
+
+        //Debug.Log("Destroying previously drawn dots");
         // Destroy previously drawn dots
         for (int i = 0; i < indicatorDotCopies.Count; i++)
         {
             Destroy(indicatorDotCopies[i]);
         }
-        Debug.Log($"All {indicatorDotCopies.Count} dots destroyed");
+        //Debug.Log($"All {indicatorDotCopies.Count} dots destroyed");
         indicatorDotCopies = new List<GameObject>();
 
         Destroy(indicatorCopy);

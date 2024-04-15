@@ -20,6 +20,7 @@ namespace Assets.Scripts
         Player,
         Block,
         Pickup,
+        Statue,
     }
 
     public enum TileType

@@ -11,7 +11,7 @@ public class PickupController : MonoBehaviour, IGridObject
     private Vector2 position;
     private float randOscillationStart;
 
-    private float speed = 2.5f;
+    private float speed = 2.0f;
 
     // Start is called before the first frame update
     void Start()
@@ -22,7 +22,7 @@ public class PickupController : MonoBehaviour, IGridObject
     // Update is called once per frame
     void Update()
     {
-        float offset = Mathf.Sin(randOscillationStart + Time.timeSinceLevelLoad * speed) * 0.1f;
+        float offset = Mathf.Sin(randOscillationStart + Time.timeSinceLevelLoad * speed) * 0.08f;
         Vector3 targetPos = new Vector3(gridPosition.x, gridPosition.y + offset, 0);
         transform.position = Vector3.MoveTowards(transform.position, targetPos, Time.deltaTime);
     }

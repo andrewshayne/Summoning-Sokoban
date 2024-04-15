@@ -21,13 +21,17 @@ public class PlayerController : MonoBehaviour, IGridObject
     public bool isSummonReady = false;
     public bool IsBasePlayer = false;
 
-    public List<Color> playerColors;
-
     // Animation
     public Animator animator;
+    public Animator flameAnimator;
 
     // ephemeral state
     private float moveSpeed = 8f;
+
+    public void SetMoveSpeed(float speed)
+    {
+        moveSpeed = speed;
+    }
 
     public void SetAnimatorMovingState(bool isMoving)
     {
@@ -37,13 +41,32 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetAnimatorSummoningState(bool isSummoning)
     {
         animator.SetBool("IsSummoning", isSummoning);
+        if (!isSummoning)
+        {
+            transform.GetChild(1).GetComponent<ParticleSystem>().Play();
+        }
     }
 
+    public void SetAnimatorBeingSummonedState(bool isBeingSummoned)
+    {
+        animator.SetBool("IsBeingSummoned", isBeingSummoned);
+        if (isBeingSummoned)
+        {
+            // Kind of hides the animation... remove it
+            //transform.GetChild(1).GetComponent<ParticleSystem>().Play();
+        }
+    }
+
+    void Awake()
+    {
+        transform.Find("summoning_circle").gameObject.SetActive(false);
+    }
 
     // Start is called before the first frame update
     void Start()
     {
-        //GetComponent<SpriteRenderer>().material.color = playerColors[colorId];
+        //GetComponent<SpriteRenderer>().color = playerColors[colorId];
+        animator.SetBool("IsActive", true);
     }
 
     // Update is called once per frame
@@ -92,6 +115,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetSummonReady(bool isReady)
     {
         isSummonReady = isReady;
+        transform.GetChild(0).gameObject.SetActive(isSummonReady);
     }
 
     public Vector2Int GetFaceDir()
@@ -143,6 +167,7 @@ public class PlayerController : MonoBehaviour, IGridObject
     public void SetColorID(int id)
     {
         colorId = id;
+        flameAnimator.SetInteger("ColorId", colorId);
     }
 
     public void SetGridPosition(Vector2Int pos)
